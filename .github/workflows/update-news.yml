@@ -1,0 +1,61 @@
+name: Auto Update Industry News
+
+on:
+  schedule:
+    # 每5天运行一次 (UTC 时间凌晨 2:00)
+    - cron: '0 2 */5 * *'
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: '手动触发原因'
+        required: false
+        default: '手动更新新闻'
+
+jobs:
+  update-news:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+    
+    - name: Install dependencies
+      run: npm install axios cheerio
+    
+    - name: Fetch and update news
+      run: node scripts/update-news.js
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Check for changes
+      id: check_changes
+      run: |
+        if git diff --quiet src/data/mockData.ts; then
+          echo "has_changes=false" >> $GITHUB_OUTPUT
+          echo "没有新的新闻需要更新"
+        else
+          echo "has_changes=true" >> $GITHUB_OUTPUT
+          echo "检测到新闻更新"
+        fi
+    
+    - name: Commit and push changes
+      if: steps.check_changes.outputs.has_changes == 'true'
+      run: |
+        git config --local user.email "github-actions[bot]@users.noreply.github.com"
+        git config --local user.name "github-actions[bot]"
+        git add src/data/mockData.ts
+        git commit -m "auto: 自动更新行业新闻 $(date +'%Y-%m-%d %H:%M:%S')"
+        git push
+    
+    - name: Trigger Vercel redeploy
+      if: steps.check_changes.outputs.has_changes == 'true'
+      run: |
+        echo "已推送更新，Vercel 将自动重新部署"
+        echo "部署地址: https://industry-news-aggregator.vercel.app"
