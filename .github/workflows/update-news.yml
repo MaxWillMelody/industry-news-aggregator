@@ -15,24 +15,23 @@ jobs:
   update-news:
     runs-on: ubuntu-latest
     
+    permissions:
+      contents: write
+    
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
       with:
-        token: ${{ secrets.GITHUB_TOKEN }}
+        fetch-depth: 0
+        persist-credentials: true
     
     - name: Setup Node.js
       uses: actions/setup-node@v4
       with:
         node-version: '20'
     
-    - name: Install dependencies
-      run: npm install axios cheerio
-    
     - name: Fetch and update news
       run: node scripts/update-news.js
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     
     - name: Check for changes
       id: check_changes
@@ -47,12 +46,14 @@ jobs:
     
     - name: Commit and push changes
       if: steps.check_changes.outputs.has_changes == 'true'
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         git config --local user.email "github-actions[bot]@users.noreply.github.com"
         git config --local user.name "github-actions[bot]"
         git add src/data/mockData.ts
         git commit -m "auto: 自动更新行业新闻 $(date +'%Y-%m-%d %H:%M:%S')"
-        git push
+        git push https://${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git HEAD:${{ github.ref }}
     
     - name: Trigger Vercel redeploy
       if: steps.check_changes.outputs.has_changes == 'true'
